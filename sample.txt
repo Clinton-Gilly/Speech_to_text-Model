@@ -1,0 +1,56 @@
+  # Configure the recognition config with diarization enabled
+        diarization_config = speech.SpeakerDiarizationConfig(
+            enable_speaker_diarization=True,
+            min_speaker_count=1,
+            max_speaker_count=2
+        )
+ 
+   config = speech.RecognitionConfig(
+    encoding=speech.RecognitionConfig.AudioEncoding.LINEAR16,
+    sample_rate_hertz=SAMPLE_RATE,
+    language_code="en-US",
+    max_alternatives=1,
+    enable_speaker_diarization=True,  # Enable diarization
+    diarization_speaker_count=2,       # Set to the maximum expected number of speakers
+)
+ 
+        streaming_config = speech.StreamingRecognitionConfig(config=config)
+ 
+        # Perform streaming recognition
+        logger.info("Streaming request to Google Cloud Speech-to-Text API...")
+        responses = client.streaming_recognize(
+            config=streaming_config,
+            requests=requests,
+        )
+ 
+        # Process the responses from streaming_recognize
+        current_speaker = None
+        speaker_text = ""
+ 
+        for response in responses:
+            for result in response.results:
+                if result.is_final:
+                    words_info = result.alternatives[0].words
+                    for word_info in words_info:
+                        speaker_tag = word_info.speaker_tag
+                        word = word_info.word
+ 
+                        # If the speaker changes, finalize the current speaker's sentence
+                        if speaker_tag != current_speaker:
+                            if current_speaker is not None:
+                                # Append the finalized sentence to the transcriptions list
+                                transcriptions.append({f"Speaker {current_speaker}": speaker_text.strip()})
+                                speaker_text = ""  # Clear the sentence for the new speaker
+ 
+                            # Start a new sentence for the new speaker
+                            current_speaker = speaker_tag
+                            speaker_text = word
+                        else:
+                            # Continue appending words to the current speaker's sentence
+                            speaker_text += ' ' + word
+ 
+                    # At the end of the final response, append the last speaker's text
+                    if speaker_text and current_speaker is not None:
+                        transcriptions.append({f"Speaker {current_speaker}": speaker_text.strip()})
+                        speaker_text = ""  # Clear the sentence after appending
+ 
